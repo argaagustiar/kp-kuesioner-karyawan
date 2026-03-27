@@ -108,7 +108,7 @@ class EmployeeController extends Controller
     // GET /api/employees/{id}
     public function show($id)
     {
-        $employee = Employee::with(['position', 'department', 'managers'])->findOrFail($id);
+        $employee = Employee::with(['position', 'department'])->findOrFail($id);
         return new EmployeeResource($employee);
     }
 
