@@ -184,19 +184,19 @@ class AttendanceRecordImportService
         $data = [
             'period_id' => $period->id,
             'employee_id' => $employee->id,
-            'sick' => $this->getIntegerValue($row, 'sick', 'sakit') || 0,
-            'work_accident' => $this->getIntegerValue($row, 'work_accident', 'kecelakaan_kerja') || 0,
-            'permit' => $this->getIntegerValue($row, 'permit', 'izin') || 0,
-            'awol' => $this->getIntegerValue($row, 'awol', 'alpa') || 0,
-            'late_permit' => $this->getIntegerValue($row, 'late_permit', 'izin_terlambat') || 0,
-            'early_leave' => $this->getIntegerValue($row, 'early_leave', 'pulang_cepat') || 0,
-            'annual_leave' => $this->getIntegerValue($row, 'annual_leave', 'cuti_tahunan') || 0,
-            'late' => $this->getIntegerValue($row, 'late', 'terlambat') || 0,
-            'warning_letter_1' => $this->getIntegerValue($row, 'warning_letter_1', 'surat_peringatan_1') || 0,
-            'warning_letter_2' => $this->getIntegerValue($row, 'warning_letter_2', 'surat_peringatan_2') || 0,
-            'warning_letter_3' => $this->getIntegerValue($row, 'warning_letter_3', 'surat_peringatan_3') || 0,
-            'subordinate_late' => $this->getIntegerValue($row, 'subordinate_late', 'bawahan_terlambat') || 0,
-            'subordinate_awol' => $this->getIntegerValue($row, 'subordinate_awol', 'bawahan_alpa') || 0,
+            'sick' => $this->getNumericValue($row, 'sick', 'sakit'),
+            'work_accident' => $this->getNumericValue($row, 'work_accident', 'kecelakaan_kerja'),
+            'permit' => $this->getNumericValue($row, 'permit', 'izin'),
+            'awol' => $this->getNumericValue($row, 'awol', 'alpa'),
+            'late_permit' => $this->getNumericValue($row, 'late_permit', 'izin_terlambat'),
+            'early_leave' => $this->getNumericValue($row, 'early_leave', 'pulang_cepat'),
+            'annual_leave' => $this->getNumericValue($row, 'annual_leave', 'cuti_tahunan'),
+            'late' => $this->getNumericValue($row, 'late', 'terlambat'),
+            'warning_letter_1' => $this->getNumericValue($row, 'warning_letter_1', 'surat_peringatan_1'),
+            'warning_letter_2' => $this->getNumericValue($row, 'warning_letter_2', 'surat_peringatan_2'),
+            'warning_letter_3' => $this->getNumericValue($row, 'warning_letter_3', 'surat_peringatan_3'),
+            'subordinate_late' => $this->getNumericValue($row, 'subordinate_late', 'bawahan_terlambat'),
+            'subordinate_awol' => $this->getNumericValue($row, 'subordinate_awol', 'bawahan_alpa'),
         ];
 
         // Check if record exists for this period and employee
@@ -239,5 +239,26 @@ class AttendanceRecordImportService
             }
         }
         return null;
+    }
+
+    /**
+     * Get numeric value from row (support both int and float)
+     */
+    private function getNumericValue(array $row, string ...$keys)
+    {
+        foreach ($keys as $key) {
+            $keyToSearch = strtolower($key);
+            
+            if (array_key_exists($keyToSearch, $row)) {
+                $value = $row[$keyToSearch];
+                
+                if ($value === '' || $value === null) {
+                    return 0;
+                }
+                
+                return (float) $value;
+            }
+        }
+        return 0;
     }
 }
