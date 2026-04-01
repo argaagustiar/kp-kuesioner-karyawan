@@ -25,6 +25,7 @@ const authStore = useAuthStore()
 const UAvatar = resolveComponent('UAvatar')
 const UButton = resolveComponent('UButton')
 const UBadge = resolveComponent('UBadge')
+const UCard = resolveComponent('UCard')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 const UCheckbox = resolveComponent('UCheckbox')
 
@@ -43,6 +44,9 @@ const selectedEmployeeId = ref<string | null>(null)
 const selectedEmployeeData = ref(null)
 const selectedPeriodId = ref<string | undefined>(null)
 const canEdit = computed(() => ['admin', 'hr_manager'].includes(authStore.user?.role))
+
+const showEvaluationModal = ref(false)
+const evaluationData = ref(null)
 
 const periods = computed(() => periodStore.periodOptions)
 const employees = computed(() => employeeStore.employees.map(e => ({
@@ -110,6 +114,37 @@ function getRowItems(row: Row<User>) {
         } catch (error) {
           console.error('Error deleting employee:', error)
         }
+      }
+    },{
+      label: 'Status Evaluation All',
+      icon: 'i-lucide-info',
+      class: 'cursor-pointer',
+      onSelect() {
+        selectedEmployeeId.value = row.original.id
+        
+        if (!selectedPeriodId.value) {
+          toast.add({
+            title: 'Select Period',
+            description: 'Please select a period before evaluating.',
+            color: 'warning'
+          })
+          return
+        }
+
+        // Fetch evaluation status
+        api.get(`/employees/${row.original.id}/hr-evaluation-status?period_id=${selectedPeriodId.value}`)
+          .then(response => {
+            evaluationData.value = response.data.data
+            showEvaluationModal.value = true
+          })
+          .catch(error => {
+            console.error('Error fetching evaluation status:', error)
+            toast.add({
+              title: 'Error',
+              description: 'Failed to fetch evaluation status.',
+              color: 'error'
+            })
+          })
       }
     })
   }
@@ -485,7 +520,6 @@ watch(sorting, () => {
         />
 
         <USelectMenu 
-          class="w-48"
           v-model="selectedPeriodId"
           :items="periods"
           value-key="id"
@@ -605,4 +639,42 @@ watch(sorting, () => {
       </div>
     </template>
   </UDashboardPanel>
+
+  <UModal v-model:open="showEvaluationModal" 
+    :title="'Evaluation Status for ' + (evaluationData?.name || '')">
+    <template #body>
+      <div v-if="evaluationData" class="space-y-4">
+        <!-- <div class="text-sm text-muted mb-4">
+          Period: {{ evaluationData.period?.name || 'N/A' }}
+        </div> -->
+        
+        <div class="grid gap-3">
+          <UCard v-for="evaluator in evaluationData.evaluators" :key="evaluator.id" class="p-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <UAvatar :name="evaluator.name" size="sm" />
+                <div>
+                  <p class="font-medium">{{ evaluator.name }}</p>
+                </div>
+              </div>
+              <UBadge 
+                :color="evaluator.evaluation_status === 'evaluated' ? 'success' : 'warning'" 
+                variant="subtle"
+                class="capitalize"
+              >
+                {{ evaluator.evaluation_status === 'evaluated' ? 'Evaluated' : 'Pending' }}
+              </UBadge>
+            </div>
+          </UCard>
+        </div>
+        
+        <div v-if="!evaluationData.evaluators || evaluationData.evaluators.length === 0" class="text-center text-muted py-8">
+          No evaluators found for this employee.
+        </div>
+      </div>
+      <div v-else class="text-center py-8">
+        Loading evaluation data...
+      </div>
+    </template>
+  </UModal>
 </template>

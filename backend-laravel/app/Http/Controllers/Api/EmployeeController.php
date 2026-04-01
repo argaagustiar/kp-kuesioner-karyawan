@@ -7,6 +7,8 @@ use App\Models\Employee;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
+use App\Models\Evaluation;
+use App\Models\Period;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
@@ -156,5 +158,138 @@ class EmployeeController extends Controller
         $employee->delete();
 
         return response()->json(['message' => 'Employee deleted successfully']);
+    }
+
+    // GET /api/employees/hr-evaluation-status
+    public function hrEvaluationStatus(Request $request)
+    {
+        $request->validate([
+            'period_id' => 'required|exists:periods,id',
+        ]);
+
+        $periodId = $request->period_id;
+
+        $employees = Employee::with(['position', 'department', 'heads', 'subordinates', 'coworkers'])
+            ->where('is_active', true)
+            ->get();
+
+        $result = $employees->map(function ($employee) use ($periodId) {
+            $evaluatorIds = $employee->heads->pluck('id')->toArray();
+            $evaluatorIds = array_merge($evaluatorIds, $employee->subordinates->pluck('id')->toArray());
+            $evaluatorIds = array_merge($evaluatorIds, $employee->coworkers->pluck('id')->toArray());
+
+            $hasEvaluation = Evaluation::where('period_id', $periodId)
+                ->where('employee_id', $employee->id)
+                ->whereIn('evaluator_id', $evaluatorIds)
+                ->exists();
+
+            return [
+                'id' => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'name' => $employee->name,
+                'position' => $employee->position ? [
+                    'id' => $employee->position->id,
+                    'title' => $employee->position->title,
+                ] : null,
+                'department' => $employee->department ? [
+                    'id' => $employee->department->id,
+                    'name' => $employee->department->name,
+                ] : null,
+                'evaluators' => $employee->heads->map(function ($head) {
+                    return [
+                        'id' => $head->id,
+                        'name' => $head->name,
+                    ];
+                }),
+                'evaluation_status' => $hasEvaluation ? 'evaluated' : 'pending',
+            ];
+        });
+
+        return response()->json([
+            'data' => $result,
+            'period_id' => $periodId,
+        ]);
+    }
+
+    // GET /api/employees/{id}/hr-evaluation-status
+    public function hrEvaluationStatusByEmployee(Request $request, $id)
+    {
+        $request->validate([
+            'period_id' => 'required|exists:periods,id',
+        ]);
+
+        $periodId = $request->period_id;
+
+        $employee = Employee::with(['position', 'department', 'heads', 'subordinates', 'coworkers'])
+            ->where('is_active', true)
+            ->findOrFail($id);
+
+        $heads = $employee->heads->map(function ($head) {
+            return [
+                'id' => $head->id,
+                'name' => $head->name,
+                'role' => 'Manager',
+            ];
+        });
+
+        $subordinates = $employee->subordinates->map(function ($sub) {
+            return [
+                'id' => $sub->id,
+                'name' => $sub->name,
+                'role' => 'Subordinate',
+            ];
+        });
+
+        $coworkers = $employee->coworkers->map(function ($coworker) {
+            return [
+                'id' => $coworker->id,
+                'name' => $coworker->name,
+                'role' => 'Coworker',
+            ];
+        });
+
+        $self = [
+            'id' => $employee->id,
+            'name' => $employee->name,
+            'role' => 'Self',
+        ];
+
+        $evaluators = array_merge($heads->toArray(), $subordinates->toArray(), $coworkers->toArray(), [$self]);
+
+        $evaluatorIds = $employee->heads->pluck('id')->toArray();
+        $evaluatorIds = array_merge($evaluatorIds, $employee->subordinates->pluck('id')->toArray());
+        $evaluatorIds = array_merge($evaluatorIds, $employee->coworkers->pluck('id')->toArray());
+        $evaluatorIds[] = $id;
+
+        $evaluation = Evaluation::where('period_id', $periodId)
+            ->where('employee_id', $employee->id)
+            ->whereIn('evaluator_id', $evaluatorIds);
+
+
+        foreach ($evaluators as &$evaluator) {
+            $hasEvaluation = $evaluation->where('evaluator_id', $evaluator['id'])->exists();
+            $evaluator['evaluation_status'] = $hasEvaluation ? 'evaluated' : 'pending';
+        }
+
+        $result = [
+            'id' => $employee->id,
+            'employee_code' => $employee->employee_code,
+            'name' => $employee->name,
+            'position' => $employee->position ? [
+                'id' => $employee->position->id,
+                'title' => $employee->position->title,
+            ] : null,
+            'department' => $employee->department ? [
+                'id' => $employee->department->id,
+                'name' => $employee->department->name,
+            ] : null,
+            'evaluators' => $evaluators,
+            'evaluation_status' => $hasEvaluation ? 'evaluated' : 'pending',
+        ];
+
+        return response()->json([
+            'data' => $result,
+            'period' => Period::find($periodId) ? Period::find($periodId)->only(['id', 'name']) : null,
+        ]);
     }
 }
