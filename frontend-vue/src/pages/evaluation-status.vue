@@ -68,29 +68,25 @@ async function init() {
 }
 
 function detailStatusEmployee(employeeId: string) {
-  if (!selectedPeriodId.value) {
-    toast.add({
-      title: 'Select Period',
-      description: 'Please select a period before evaluating.',
-      color: 'warning'
-    })
-    return
-  }
-
   // Fetch evaluation status
-  api.get(`/employees/${employeeId}/hr-evaluation-status?period_id=${selectedPeriodId.value}`)
-    .then(response => {
-      evaluationData.value = response.data.data
-      showEvaluationModal.value = true
-    })
-    .catch(error => {
-      console.error('Error fetching evaluation status:', error)
-      toast.add({
-        title: 'Error',
-        description: 'Failed to fetch evaluation status.',
-        color: 'error'
-      })
-    })
+  // api.get(`/employees/${employeeId}/hr-evaluation-status?period_id=${selectedPeriodId.value}`)
+  //   .then(response => {
+  //     evaluationData.value = response.data.data
+  //     showEvaluationModal.value = true
+  //   })
+  //   .catch(error => {
+  //     console.error('Error fetching evaluation status:', error)
+  //     toast.add({
+  //       title: 'Error',
+  //       description: 'Failed to fetch evaluation status.',
+  //       color: 'error'
+  //     })
+  //   })
+
+  evaluationData.value = null;
+
+  evaluationData.value = allEvaluationData.value.find(e => e.id === employeeId) || null
+  showEvaluationModal.value = true
 }
 
 init()
