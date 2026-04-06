@@ -85,7 +85,11 @@ function detailStatusEmployee(employeeId: string) {
 
   evaluationData.value = null;
 
-  evaluationData.value = allEvaluationData.value.find(e => e.id === employeeId) || null
+  evaluationData.value = allEvaluationData.value.find(e => e.id === employeeId) || null;
+  if (evaluationData.value?.evaluators) {
+    evaluationData.value.evaluators = [...evaluationData.value.evaluators]
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
   showEvaluationModal.value = true
 }
 
