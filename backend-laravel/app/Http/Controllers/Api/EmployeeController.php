@@ -18,6 +18,7 @@ class EmployeeController extends Controller
     public function index(Request $request)
     {
         $query = Employee::with(['position', 'department', 'subordinates']);
+        $employee = $request->user()->load('employee');
 
         // Fitur Pencarian
         if ($request->has('search') && !empty($request->search)) {
@@ -41,6 +42,7 @@ class EmployeeController extends Controller
                 ->orWhereHas('coworkers', function($mgrQuery) use ($request) {
                     $mgrQuery->where('manager_id', $request->user()->employee_id);
                 })
+                ->orWhere('department_id', $employee->employee->department_id)
                 ->orWhere('id', $request->user()->employee_id);
             }
         }
@@ -51,7 +53,10 @@ class EmployeeController extends Controller
         }
 
         if ($request->has('period_id')) {
-            $query->with(['evaluations' => function($evalQuery) use ($request) {
+            $query->withExists(['evaluations as has_current_evaluation' => function($evalQuery) use ($request) {
+                $evalQuery->where('period_id', $request->period_id)
+                          ->where('evaluator_id', $request->user()->employee_id);
+            }])->with(['evaluations' => function($evalQuery) use ($request) {
                 $evalQuery->where('period_id', $request->period_id)
                           ->where('evaluator_id', $request->user()->employee_id);
             }]);
@@ -60,7 +65,13 @@ class EmployeeController extends Controller
         $sortBy = $request->input('sort_by', 'name'); 
         $sortDirection = $request->input('sort_direction', 'asc');
 
-        $allowedSorts = ['name', 'email', 'employee_code', 'join_date', 'end_contract_date', 'created_at'];
+        $allowedSorts = ['name', 'email', 'employee_code', 'join_date', 'end_contract_date', 'created_at', 'has_current_evaluation'];
+
+        if ($request->has('role')) {
+            if ($request->role == 'employee') {
+                $query->orderBy('has_current_evaluation', 'asc');
+            }
+        }
 
         if (in_array($sortBy, $allowedSorts)) {
             $query->orderBy($sortBy, $sortDirection);
@@ -69,7 +80,7 @@ class EmployeeController extends Controller
         }
 
         // Pagination
-        $employees = $query->orderBy($sortBy, $sortDirection)->paginate($request->input('per_page', 10));
+        $employees = $query->paginate($request->input('per_page', 10));
 
         return EmployeeResource::collection($employees);
     }
