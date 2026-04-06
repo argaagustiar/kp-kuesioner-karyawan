@@ -185,14 +185,71 @@ class EmployeeController extends Controller
             ->get();
 
         $result = $employees->map(function ($employee) use ($periodId) {
-            $evaluatorIds = $employee->heads->pluck('id')->toArray();
-            $evaluatorIds = array_merge($evaluatorIds, $employee->subordinates->pluck('id')->toArray());
-            $evaluatorIds = array_merge($evaluatorIds, $employee->coworkers->pluck('id')->toArray());
+            // Ambil semua evaluator untuk employee ini
+            $heads = $employee->heads->map(function ($head) {
+                return [
+                    'id' => $head->id,
+                    'name' => $head->name,
+                    'role' => 'Manager',
+                ];
+            });
 
-            $hasEvaluation = Evaluation::where('period_id', $periodId)
+            $subordinates = $employee->subordinates->map(function ($sub) {
+                return [
+                    'id' => $sub->id,
+                    'name' => $sub->name,
+                    'role' => 'Subordinate',
+                ];
+            });
+
+            $coworkers = $employee->coworkers->map(function ($coworker) {
+                return [
+                    'id' => $coworker->id,
+                    'name' => $coworker->name,
+                    'role' => 'Coworker',
+                ];
+            });
+
+            // Tambah dept coworkers
+            $deptEmployees = Employee::where('department_id', $employee->department_id)
+                ->where('id', '!=', $employee->id)
+                ->get();
+
+            $deptcoworkers = $deptEmployees->map(function ($deptEmp) {
+                return [
+                    'id' => $deptEmp->id,
+                    'name' => $deptEmp->name,
+                    'role' => 'Dept Coworker',
+                ];
+            });
+
+            $self = [
+                'id' => $employee->id,
+                'name' => $employee->name,
+                'role' => 'Self',
+            ];
+
+            $evaluators = array_merge($heads->toArray(), $subordinates->toArray(), $coworkers->toArray(), $deptcoworkers->toArray(), [$self]);
+            $evaluators = collect($evaluators)->unique('id')->values()->toArray();
+
+            // Collect evaluator IDs
+            $evaluatorIds = array_column($evaluators, 'id');
+
+            // Cek evaluation untuk setiap evaluator
+            $evaluationQuery = Evaluation::where('period_id', $periodId)
                 ->where('employee_id', $employee->id)
-                ->whereIn('evaluator_id', $evaluatorIds)
-                ->exists();
+                ->whereIn('evaluator_id', $evaluatorIds);
+
+            foreach ($evaluators as &$evaluator) {
+                $hasEvaluation = (clone $evaluationQuery)->where('evaluator_id', $evaluator['id'])->exists();
+                $evaluator['evaluation_status'] = $hasEvaluation ? 'evaluated' : 'pending';
+            }
+
+            // Hitung status overall
+            $evaluatedCount = count(array_filter($evaluators, fn($e) => $e['evaluation_status'] === 'evaluated'));
+            $totalEvaluators = count($evaluators);
+            $overallStatus = $evaluatedCount === $totalEvaluators ? 'fully_evaluated' : 
+                           ($evaluatedCount > 0 ? 'partially_evaluated' : 'not_evaluated');
 
             return [
                 'id' => $employee->id,
@@ -206,19 +263,19 @@ class EmployeeController extends Controller
                     'id' => $employee->department->id,
                     'name' => $employee->department->name,
                 ] : null,
-                'evaluators' => $employee->heads->map(function ($head) {
-                    return [
-                        'id' => $head->id,
-                        'name' => $head->name,
-                    ];
-                }),
-                'evaluation_status' => $hasEvaluation ? 'evaluated' : 'pending',
+                'evaluators' => $evaluators,
+                'evaluation_summary' => [
+                    'total_evaluators' => $totalEvaluators,
+                    'evaluated_count' => $evaluatedCount,
+                    'pending_count' => $totalEvaluators - $evaluatedCount,
+                    'overall_status' => $overallStatus,
+                ],
             ];
         });
 
         return response()->json([
-            'data' => $result,
-            'period_id' => $periodId,
+            'data' => $result->sortBy('name')->values(),
+            'period' => Period::find($periodId) ? Period::find($periodId)->only(['id', 'name']) : null,
         ]);
     }
 
@@ -234,6 +291,16 @@ class EmployeeController extends Controller
         $employee = Employee::with(['position', 'department', 'heads', 'subordinates', 'coworkers'])
             ->where('is_active', true)
             ->findOrFail($id);
+
+        $deptEmployees = Employee::where('department_id', $employee->department_id)->get();
+
+        $deptcoworkers = $deptEmployees->map(function ($deptEmp) {
+            return [
+                'id' => $deptEmp->id,
+                'name' => $deptEmp->name,
+                'role' => 'Coworker',
+            ];
+        });
 
         $heads = $employee->heads->map(function ($head) {
             return [
@@ -265,11 +332,13 @@ class EmployeeController extends Controller
             'role' => 'Self',
         ];
 
-        $evaluators = array_merge($heads->toArray(), $subordinates->toArray(), $coworkers->toArray(), [$self]);
+        $evaluators = array_merge($deptcoworkers->toArray(), $heads->toArray(), $subordinates->toArray(), $coworkers->toArray(), [$self]);
+        $evaluators = collect($evaluators)->unique('id')->values()->toArray();
 
         $evaluatorIds = $employee->heads->pluck('id')->toArray();
         $evaluatorIds = array_merge($evaluatorIds, $employee->subordinates->pluck('id')->toArray());
         $evaluatorIds = array_merge($evaluatorIds, $employee->coworkers->pluck('id')->toArray());
+        $evaluatorIds = array_merge($evaluatorIds, $deptEmployees->pluck('id')->toArray());
         $evaluatorIds[] = $id;
 
         $evaluation = Evaluation::where('period_id', $periodId)

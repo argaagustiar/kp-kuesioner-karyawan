@@ -54,10 +54,20 @@ const employees = computed(() => employeeStore.employees.map(e => ({
   join_date: e.join_date ? formatDate.format(new Date(e.join_date)) : null
 })))
 
-function openCreateModal() {
-  selectedEmployeeId.value = null
-  selectedEmployeeData.value = null
-  showModal.value = true
+function openAllEvaluationModal() {
+  if (!selectedPeriodId.value) {
+    toast.add({
+      title: 'Select Period',
+      description: 'Please select a period first.',
+      color: 'warning'
+    })
+    return
+  }
+
+  router.push({
+    path: '/evaluation-status',
+    query: { period_id: selectedPeriodId.value }
+  })
 }
 
 function openEditModal(employee: any) {
@@ -503,6 +513,7 @@ watch(sorting, () => {
         </template>
 
         <template #right>
+          <UButton v-if="userRole === 'admin' || userRole === 'hr'" label="View All Evaluation Status" icon="i-lucide-bar-chart-3" class="cursor-pointer mr-2" @click="openAllEvaluationModal" />
           <UButton v-if="userRole === 'admin' || userRole === 'hr'" label="New Employee" icon="i-lucide-plus" class="cursor-pointer" @click="openCreateModal" />
           <UsersAddModal v-model="showModal" :employeeId="selectedEmployeeId" :initialData="selectedEmployeeData" />
         </template>

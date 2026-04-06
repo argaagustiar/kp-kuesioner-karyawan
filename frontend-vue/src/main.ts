@@ -32,6 +32,7 @@ const routes = [
   { path: '/period', component: () => import('./pages/period.vue'), meta: { layout: 'AppLayout', requiresAuth: true } },
   { path: '/attendance', component: () => import('./pages/attendance.vue'), meta: { layout: 'AppLayout', requiresAuth: true } },
   { path: '/reports', component: () => import('./pages/reports.vue'), meta: { layout: 'AppLayout', requiresAuth: true } },
+  { path: '/evaluation-status', component: () => import('./pages/evaluation-status.vue'), meta: { layout: 'AppLayout', requiresAuth: true } },
 ]
 
 const router = createRouter({ routes, history: createWebHistory() })

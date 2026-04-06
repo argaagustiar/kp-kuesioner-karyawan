@@ -20,9 +20,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
 
+    // All Evaluation Status for HR
+    Route::get('employees/hr-evaluation-status-all', [EmployeeController::class, 'hrEvaluationStatus']);
+
     // Resource Routes
     Route::apiResource('employees', EmployeeController::class);
-    Route::get('employees/hr-evaluation-status', [EmployeeController::class, 'hrEvaluationStatus']);
     Route::get('employees/{id}/hr-evaluation-status', [EmployeeController::class, 'hrEvaluationStatusByEmployee']);
     Route::apiResource('departments', DepartmentController::class);
     Route::apiResource('positions', PositionController::class);
