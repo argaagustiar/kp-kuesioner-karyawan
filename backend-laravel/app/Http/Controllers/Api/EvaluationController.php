@@ -11,6 +11,7 @@ use App\Http\Requests\UpdateEvaluationRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\EvaluationResource;
 use App\Models\Evaluation;
+use App\Models\Period;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -307,189 +308,30 @@ class EvaluationController extends Controller
             return response()->json(['message' => 'period_id is required'], 400);
         }
 
-        // reuse summary query from evaluationSummary above
-        $POINTS = [
-            'attendance' => [
-                'sick' => -0.1,
-                'work_accident' => -0.5,
-                'permit' => -0.5,
-                'awol' => -5.0,
-                'late_permit' => -0.25,
-                'early_leave' => -0.25,
-                'annual_leave' => -0.1,
-                'late' => -3.0,
-            ],
-            'warning' => [
-                'first' => -5,
-                'second' => -10,
-                'third' => -15,
-            ],
-            'dept_head' => [
-                'sub_late' => -1,
-                'sub_awol' => -2,
-            ],
-        ];
+        $period = Period::find($periodId);
 
-        $summary = Evaluation::select(
-            'id',
-            'employee_id',
-            'period_id',
-            'evaluator_id',
-            'question_1',
-            'question_2',
-            'question_3',
-            'question_4',
-            'question_5',
-            'question_6',
-            'question_7',
-            'question_8',
-            'question_9',
-            'question_10',
-        )
-        ->where('period_id', $periodId)
-        ->with(['employee', 'employee.department', 'employee.position', 'employee.heads', 'employee.subordinates', 'employee.coworkers', 'period', 'evaluator'])
-        ->get();
+        $startDateMonth = $period->start_date->format('F');
+        $isSecondHalfFY = $startDateMonth === 'March' ? true : false;
+        
+        $dataGroupedByEmployee = $this->evaluationSummaryByPeriodId($periodId);
+        $dataGroupedByEmployeeFirstHalf = [];
 
-        $dataGroupedByEmployee = $summary->groupBy('employee_id')->map(function ($evaluations, $employeeId) use ($POINTS) {
-            $employee = $evaluations->first()->employee;
-            $period = $evaluations->first()->period;
-
-            $subsIds = $employee->subordinates->pluck('id')->all();
-            $headsIds = $employee->heads->pluck('id')->all();
-            $coworkerIds = $employee->coworkers->pluck('id')->all();
-
-            $calcOverall = function ($subset) {
-                if ($subset->isEmpty()) {
-                    return null;
-                }
-                return round(
-                    $subset->map(function ($e) {
-                        return (
-                            $e->question_1 + $e->question_2 + $e->question_3 +
-                            $e->question_4 + $e->question_5 + $e->question_6 +
-                            $e->question_7 + $e->question_8 + $e->question_9 +
-                            $e->question_10
-                        );
-                    })->avg(),
-                    2
-                );
-            };
-
-            $averageScores = [
-                'subordinates' => $calcOverall($evaluations->whereIn('evaluator_id', $subsIds)),
-                'heads'        => $calcOverall($evaluations->whereIn('evaluator_id', $headsIds)),
-                'coworkers'    => $calcOverall($evaluations->whereIn('evaluator_id', $coworkerIds)),
-                'self'         => $calcOverall($evaluations->where('evaluator_id', $employee->id)),
-                'head_self'    => $calcOverall($evaluations->whereIn('evaluator_id', [...$headsIds, $employee->id])),
-            ];
-
-            $attendanceRecord = $employee->attendanceRecords()
-                ->where('period_id', $period->id)
-                ->first();
-
-            // compute attendance score details again
-            $attendanceScore = 0;
-            $attendanceScoreDetails = [];
-            if ($attendanceRecord) {
-                $attendanceScoreDetails = [
-                    'sick' => $attendanceRecord->sick * $POINTS['attendance']['sick'],
-                    'work_accident' => $attendanceRecord->work_accident * $POINTS['attendance']['work_accident'],
-                    'permit' => $attendanceRecord->permit * $POINTS['attendance']['permit'],
-                    'awol' => $attendanceRecord->awol * $POINTS['attendance']['awol'],
-                    'late_permit' => $attendanceRecord->late_permit * $POINTS['attendance']['late_permit'],
-                    'early_leave' => $attendanceRecord->early_leave * $POINTS['attendance']['early_leave'],
-                    'annual_leave' => $attendanceRecord->annual_leave * $POINTS['attendance']['annual_leave'],
-                    'late' => $attendanceRecord->late * $POINTS['attendance']['late'],
-                    'warning_letter_1' => $attendanceRecord->warning_letter_1 * $POINTS['warning']['first'],
-                    'warning_letter_2' => $attendanceRecord->warning_letter_2 * $POINTS['warning']['second'],
-                    'warning_letter_3' => $attendanceRecord->warning_letter_3 * $POINTS['warning']['third'],
-                    'subordinate_late' => $attendanceRecord->subordinate_late * $POINTS['dept_head']['sub_late'],
-                    'subordinate_awol' => $attendanceRecord->subordinate_awol * $POINTS['dept_head']['sub_awol'],
-                ];
-
-                $attendanceScore += array_sum($attendanceScoreDetails);
+        if ($isSecondHalfFY) {
+            $firstHalfEndDate = $period->start_date->copy()->subDay();
+            $firstHalfPeriod = Period::where('end_date', $firstHalfEndDate)->first();
+            if ($firstHalfPeriod) {
+                $dataGroupedByEmployeeFirstHalf = $this->evaluationSummaryByPeriodId($firstHalfPeriod->id);
             }
+        }
 
-            // prepare weighted evaluation values
-            $eval_superior_1 = $averageScores['head_self'] ?? 0;
-            $eval_superior_2 = round($attendanceScore + ($averageScores['head_self'] ?? 0), 2);
-            $eval_coworker = $averageScores['coworkers'] ?? 0;
-            $eval_leader_up = $averageScores['subordinates'] ?? null;
+        foreach ($dataGroupedByEmployeeFirstHalf as $employeeId => $data) {
+            $dataGroupedByEmployee[$employeeId]['percent_1st_half'] = $data['percent_2nd_half'];
 
-            // conditional weighted formula
-            if (!empty($eval_leader_up)) {
-                // leader-up exists: 75% superior_2, 10% coworker, 15% leader_up
-                $avg_eval = round(($eval_superior_2 * 0.75) + ($eval_coworker * 0.10) + ($eval_leader_up * 0.15), 2);
-            } else {
-                // no leader-up: 90% superior_2, 10% coworker
-                $avg_eval = round(($eval_superior_2 * 0.90) + ($eval_coworker * 0.10), 2);
+            if ($isSecondHalfFY && isset($dataGroupedByEmployeeFirstHalf[$employeeId])) {
+                $avgFY = ($dataGroupedByEmployee[$employeeId]['percent_2nd_half'] + $dataGroupedByEmployee[$employeeId]['percent_1st_half']) / 2;
+                $dataGroupedByEmployee[$employeeId]['avg_percent_fy'] = round($avgFY, 1);
             }
-
-            return [
-                'employee_id' => $employee->employee_code ?? $employee->id,
-                'full_name' => $employee->name,
-                'organization' => $employee->department->name ?? '',
-                'job_position' => $employee->position->title ?? '',
-                'join_date' => $employee->join_date?->format('d-m-Y') ?? '',
-                'regular_employee' => '',
-                'work_tenure' => $employee->join_date ? round($employee->join_date->diffInYears(now()), 2) : 0,
-                'promotion_to' => '',
-                // attendance columns
-                'sick_leave' => $attendanceScoreDetails['sick'] ?? 0,
-                'work_accident' => $attendanceScoreDetails['work_accident'] ?? 0,
-                'permit_no_annual' => $attendanceScoreDetails['permit'] ?? 0,
-                'absent_awol' => $attendanceScoreDetails['awol'] ?? 0,
-                'permit_late' => $attendanceScoreDetails['late_permit'] ?? 0,
-                'permit_early' => $attendanceScoreDetails['early_leave'] ?? 0,
-                'annual_leave' => $attendanceScoreDetails['annual_leave'] ?? 0,
-                'late' => $attendanceScoreDetails['late'] ?? 0,
-                'warning_1' => $attendanceScoreDetails['warning_letter_1'] ?? 0,
-                'warning_2' => $attendanceScoreDetails['warning_letter_2'] ?? 0,
-                'warning_3' => $attendanceScoreDetails['warning_letter_3'] ?? 0,
-                'sub_late' => $attendanceScoreDetails['subordinate_late'] ?? 0,
-                'sub_awol' => $attendanceScoreDetails['subordinate_awol'] ?? 0,
-                'attendance_total' => round($attendanceScore,2),
-                'eval_superior_1' => $eval_superior_1,
-                'eval_superior_2' => $eval_superior_2,
-                'eval_coworker' => $eval_coworker,
-                'eval_leader_up' => $eval_leader_up,
-                'avg_eval' => $avg_eval,
-                'attendance_score' => round($attendanceScore,2),
-                // additional metric columns left blank
-                'percent_2nd_half' => '',
-                'percent_1st_half' => '',
-                'avg_percent_fy' => '',
-                'merit_rating' => '',
-                // duplicate attendance detail later may be omitted intentionally
-                'times_sick_leave' => $attendanceRecord->sick ?? 0,
-                'times_work_accident' => $attendanceRecord->work_accident ?? 0,
-                'times_permit_no_annual' => $attendanceRecord->permit ?? 0,
-                'times_absent_awol' => $attendanceRecord->awol ?? 0,
-                'times_permit_late' => $attendanceRecord->late_permit ?? 0,
-                'times_permit_early' => $attendanceRecord->early_leave ?? 0,
-                'times_annual_leave' => $attendanceRecord->annual_leave ?? 0,
-                'times_late' => $attendanceRecord->late ?? 0,
-                'times_warning_1' => $attendanceRecord->warning_letter_1 ?? 0,
-                'times_warning_2' => $attendanceRecord->warning_letter_2 ?? 0,
-                'times_warning_3' => $attendanceRecord->warning_letter_3 ?? 0,
-                'times_sub_late' => $attendanceRecord->subordinate_late ?? 0,
-                'times_sub_awol' => $attendanceRecord->subordinate_awol ?? 0,
-                'point_sick_leave' => $POINTS['attendance']['sick'] ?? 0,
-                'point_work_accident' => $POINTS['attendance']['work_accident'] ?? 0,
-                'point_permit_no_annual' => $POINTS['attendance']['permit'] ?? 0,
-                'point_absent_awol' => $POINTS['attendance']['awol'] ?? 0,
-                'point_permit_late' => $POINTS['attendance']['late_permit'] ?? 0,
-                'point_permit_early' => $POINTS['attendance']['early_leave'] ?? 0,
-                'point_annual_leave' => $POINTS['attendance']['annual_leave'] ?? 0,
-                'point_late' => $POINTS['attendance']['late'] ?? 0,
-                'point_warning_1' => $POINTS['attendance']['warning_letter_1'] ?? 0,
-                'point_warning_2' => $POINTS['attendance']['warning_letter_2'] ?? 0,
-                'point_warning_3' => $POINTS['attendance']['warning_letter_3'] ?? 0,
-                'point_sub_late' => $POINTS['attendance']['subordinate_late'] ?? 0,
-                'point_sub_awol' => $POINTS['attendance']['subordinate_awol'] ?? 0,
-                
-            ];
-        });
+        };
 
         // detail headings for each column
         $detailHeadings = [
@@ -817,5 +659,194 @@ class EvaluationController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Cache-Control' => 'max-age=0',
         ]);
+    }
+
+    protected function evaluationSummaryByPeriodId($periodId)
+    {
+        // reuse summary query from evaluationSummary above
+        $POINTS = [
+            'attendance' => [
+                'sick' => -0.1,
+                'work_accident' => -0.5,
+                'permit' => -0.5,
+                'awol' => -5.0,
+                'late_permit' => -0.25,
+                'early_leave' => -0.25,
+                'annual_leave' => -0.1,
+                'late' => -3.0,
+            ],
+            'warning' => [
+                'first' => -5,
+                'second' => -10,
+                'third' => -15,
+            ],
+            'dept_head' => [
+                'sub_late' => -1,
+                'sub_awol' => -2,
+            ],
+        ];
+
+        $summary = Evaluation::select(
+            'id',
+            'employee_id',
+            'period_id',
+            'evaluator_id',
+            'question_1',
+            'question_2',
+            'question_3',
+            'question_4',
+            'question_5',
+            'question_6',
+            'question_7',
+            'question_8',
+            'question_9',
+            'question_10',
+        )
+        ->where('period_id', $periodId)
+        ->with(['employee', 'employee.department', 'employee.position', 'employee.heads', 'employee.subordinates', 'employee.coworkers', 'period', 'evaluator'])
+        ->get();
+
+        $dataGroupedByEmployee = $summary->groupBy('employee_id')->map(function ($evaluations, $employeeId) use ($POINTS) {
+            $employee = $evaluations->first()->employee;
+            $period = $evaluations->first()->period;
+
+            $subsIds = $employee->subordinates->pluck('id')->all();
+            $headsIds = $employee->heads->pluck('id')->all();
+            $coworkerIds = $employee->coworkers->pluck('id')->all();
+
+            $calcOverall = function ($subset) {
+                if ($subset->isEmpty()) {
+                    return null;
+                }
+                return round(
+                    $subset->map(function ($e) {
+                        return (
+                            $e->question_1 + $e->question_2 + $e->question_3 +
+                            $e->question_4 + $e->question_5 + $e->question_6 +
+                            $e->question_7 + $e->question_8 + $e->question_9 +
+                            $e->question_10
+                        );
+                    })->avg(),
+                    2
+                );
+            };
+
+            $averageScores = [
+                'subordinates' => $calcOverall($evaluations->whereIn('evaluator_id', $subsIds)),
+                'heads'        => $calcOverall($evaluations->whereIn('evaluator_id', $headsIds)),
+                'coworkers'    => $calcOverall($evaluations->whereIn('evaluator_id', $coworkerIds)),
+                'self'         => $calcOverall($evaluations->where('evaluator_id', $employee->id)),
+                'head_self'    => $calcOverall($evaluations->whereIn('evaluator_id', [...$headsIds, $employee->id])),
+            ];
+
+            $attendanceRecord = $employee->attendanceRecords()
+                ->where('period_id', $period->id)
+                ->first();
+
+            // compute attendance score details again
+            $attendanceScore = 0;
+            $attendanceScoreDetails = [];
+            if ($attendanceRecord) {
+                $attendanceScoreDetails = [
+                    'sick' => $attendanceRecord->sick * $POINTS['attendance']['sick'],
+                    'work_accident' => $attendanceRecord->work_accident * $POINTS['attendance']['work_accident'],
+                    'permit' => $attendanceRecord->permit * $POINTS['attendance']['permit'],
+                    'awol' => $attendanceRecord->awol * $POINTS['attendance']['awol'],
+                    'late_permit' => $attendanceRecord->late_permit * $POINTS['attendance']['late_permit'],
+                    'early_leave' => $attendanceRecord->early_leave * $POINTS['attendance']['early_leave'],
+                    'annual_leave' => $attendanceRecord->annual_leave * $POINTS['attendance']['annual_leave'],
+                    'late' => $attendanceRecord->late * $POINTS['attendance']['late'],
+                    'warning_letter_1' => $attendanceRecord->warning_letter_1 * $POINTS['warning']['first'],
+                    'warning_letter_2' => $attendanceRecord->warning_letter_2 * $POINTS['warning']['second'],
+                    'warning_letter_3' => $attendanceRecord->warning_letter_3 * $POINTS['warning']['third'],
+                    'subordinate_late' => $attendanceRecord->subordinate_late * $POINTS['dept_head']['sub_late'],
+                    'subordinate_awol' => $attendanceRecord->subordinate_awol * $POINTS['dept_head']['sub_awol'],
+                ];
+
+                $attendanceScore += array_sum($attendanceScoreDetails);
+            }
+
+            // prepare weighted evaluation values
+            $eval_superior_1 = $averageScores['head_self'] ?? 0;
+            $eval_superior_2 = round($attendanceScore + ($averageScores['head_self'] ?? 0), 2);
+            $eval_coworker = $averageScores['coworkers'] ?? 0;
+            $eval_leader_up = $averageScores['subordinates'] ?? null;
+
+            // conditional weighted formula
+            if (!empty($eval_leader_up)) {
+                // leader-up exists: 75% superior_2, 10% coworker, 15% leader_up
+                $avg_eval = round(($eval_superior_2 * 0.75) + ($eval_coworker * 0.10) + ($eval_leader_up * 0.15), 2);
+            } else {
+                // no leader-up: 90% superior_2, 10% coworker
+                $avg_eval = round(($eval_superior_2 * 0.90) + ($eval_coworker * 0.10), 2);
+            }
+
+            return [
+                'employee_id' => $employee->employee_code ?? $employee->id,
+                'full_name' => $employee->name,
+                'organization' => $employee->department->name ?? '',
+                'job_position' => $employee->position->title ?? '',
+                'join_date' => $employee->join_date?->format('d-m-Y') ?? '',
+                'regular_employee' => '',
+                'work_tenure' => $employee->join_date ? round($employee->join_date->diffInYears(now()), 2) : 0,
+                'promotion_to' => '',
+                // attendance columns
+                'sick_leave' => $attendanceScoreDetails['sick'] ?? 0,
+                'work_accident' => $attendanceScoreDetails['work_accident'] ?? 0,
+                'permit_no_annual' => $attendanceScoreDetails['permit'] ?? 0,
+                'absent_awol' => $attendanceScoreDetails['awol'] ?? 0,
+                'permit_late' => $attendanceScoreDetails['late_permit'] ?? 0,
+                'permit_early' => $attendanceScoreDetails['early_leave'] ?? 0,
+                'annual_leave' => $attendanceScoreDetails['annual_leave'] ?? 0,
+                'late' => $attendanceScoreDetails['late'] ?? 0,
+                'warning_1' => $attendanceScoreDetails['warning_letter_1'] ?? 0,
+                'warning_2' => $attendanceScoreDetails['warning_letter_2'] ?? 0,
+                'warning_3' => $attendanceScoreDetails['warning_letter_3'] ?? 0,
+                'sub_late' => $attendanceScoreDetails['subordinate_late'] ?? 0,
+                'sub_awol' => $attendanceScoreDetails['subordinate_awol'] ?? 0,
+                'attendance_total' => round($attendanceScore,2),
+                'eval_superior_1' => $eval_superior_1,
+                'eval_superior_2' => $eval_superior_2,
+                'eval_coworker' => $eval_coworker,
+                'eval_leader_up' => $eval_leader_up,
+                'avg_eval' => $avg_eval,
+                'attendance_score' => round($attendanceScore,2),
+                // additional metric columns left blank
+                'percent_2nd_half' => $avg_eval,
+                'percent_1st_half' => '',
+                'avg_percent_fy' => '',
+                'merit_rating' => '',
+                // duplicate attendance detail later may be omitted intentionally
+                'times_sick_leave' => $attendanceRecord->sick ?? 0,
+                'times_work_accident' => $attendanceRecord->work_accident ?? 0,
+                'times_permit_no_annual' => $attendanceRecord->permit ?? 0,
+                'times_absent_awol' => $attendanceRecord->awol ?? 0,
+                'times_permit_late' => $attendanceRecord->late_permit ?? 0,
+                'times_permit_early' => $attendanceRecord->early_leave ?? 0,
+                'times_annual_leave' => $attendanceRecord->annual_leave ?? 0,
+                'times_late' => $attendanceRecord->late ?? 0,
+                'times_warning_1' => $attendanceRecord->warning_letter_1 ?? 0,
+                'times_warning_2' => $attendanceRecord->warning_letter_2 ?? 0,
+                'times_warning_3' => $attendanceRecord->warning_letter_3 ?? 0,
+                'times_sub_late' => $attendanceRecord->subordinate_late ?? 0,
+                'times_sub_awol' => $attendanceRecord->subordinate_awol ?? 0,
+                'point_sick_leave' => $POINTS['attendance']['sick'] ?? 0,
+                'point_work_accident' => $POINTS['attendance']['work_accident'] ?? 0,
+                'point_permit_no_annual' => $POINTS['attendance']['permit'] ?? 0,
+                'point_absent_awol' => $POINTS['attendance']['awol'] ?? 0,
+                'point_permit_late' => $POINTS['attendance']['late_permit'] ?? 0,
+                'point_permit_early' => $POINTS['attendance']['early_leave'] ?? 0,
+                'point_annual_leave' => $POINTS['attendance']['annual_leave'] ?? 0,
+                'point_late' => $POINTS['attendance']['late'] ?? 0,
+                'point_warning_1' => $POINTS['attendance']['warning_letter_1'] ?? 0,
+                'point_warning_2' => $POINTS['attendance']['warning_letter_2'] ?? 0,
+                'point_warning_3' => $POINTS['attendance']['warning_letter_3'] ?? 0,
+                'point_sub_late' => $POINTS['attendance']['subordinate_late'] ?? 0,
+                'point_sub_awol' => $POINTS['attendance']['subordinate_awol'] ?? 0,
+                
+            ];
+        });
+
+        return $dataGroupedByEmployee;
     }
 }
