@@ -161,7 +161,8 @@ function getRowItems(row: Row<User>) {
 
   // 3. Kondisi Khusus: EVALUATE (Misalnya untuk 'manager' atau 'hr')
   // Kita gunakan .includes jika role yang diizinkan lebih dari satu
-  if (['hr', 'hr2', 'employee'].includes(userRole)) {
+  // if (['hr', 'hr2', 'employee'].includes(userRole)) {
+  if (['hr', 'hr2'].includes(userRole)) { //untuk lock evaluasi
     // Tambahkan separator dulu agar rapi
     items.push({ type: 'separator' })
     
