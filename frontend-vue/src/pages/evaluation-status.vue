@@ -15,6 +15,7 @@ const UBadge = resolveComponent('UBadge')
 const toast = useToast()
 
 const selectedPeriodId = ref<string | undefined>(undefined)
+const selectedEmployeeId = ref<string | undefined>(undefined)
 const allEvaluationData = ref([])
 const loading = ref(false)
 const showEvaluationModal = ref(false)
@@ -68,6 +69,7 @@ async function init() {
 }
 
 function detailStatusEmployee(employeeId: string) {
+  selectedEmployeeId.value = employeeId
   // Fetch evaluation status
   // api.get(`/employees/${employeeId}/hr-evaluation-status?period_id=${selectedPeriodId.value}`)
   //   .then(response => {
@@ -91,6 +93,13 @@ function detailStatusEmployee(employeeId: string) {
       .sort((a, b) => a.name.localeCompare(b.name))
   }
   showEvaluationModal.value = true
+}
+
+function showEvaluationByEvaluator(evaluatorId: string) {
+  router.push({
+    path: '/form',
+    query: { employeeId: selectedEmployeeId.value, periodId: selectedPeriodId.value, evaluatorId }
+  })
 }
 
 init()
@@ -230,7 +239,7 @@ init()
         </div> -->
         
         <div class="grid gap-3">
-          <UCard v-for="evaluator in evaluationData.evaluators" :key="evaluator.id" class="p-4">
+          <UCard v-for="evaluator in evaluationData.evaluators" :key="evaluator.id" class="p-4 cursor-pointer" @click="showEvaluationByEvaluator(evaluator.id)">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
                 <UAvatar :name="evaluator.name" size="sm" />

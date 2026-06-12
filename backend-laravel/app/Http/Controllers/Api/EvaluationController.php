@@ -849,4 +849,296 @@ class EvaluationController extends Controller
 
         return $dataGroupedByEmployee;
     }
+
+    public function evaluationBreakdown(Request $request)
+    {
+        $periodId = $request->query('period_id');
+
+        if (!$periodId) {
+            return response()->json(['message' => 'period_id is required'], 400);
+        }
+
+        // Get all evaluations for the period with detailed question answers
+        $evaluations = Evaluation::select(
+            'id',
+            'employee_id',
+            'evaluator_id',
+            'question_1',
+            'question_2',
+            'question_3',
+            'question_4',
+            'question_5',
+            'question_6',
+            'question_7',
+            'question_8',
+            'question_9',
+            'question_10',
+        )
+        ->where('period_id', $periodId)
+        ->with(['employee', 'employee.department', 'employee.position', 'employee.heads', 'employee.subordinates', 'employee.coworkers', 'evaluator'])
+        ->get();
+
+        $dataGroupedByEmployee = $evaluations->groupBy('employee_id')->map(function ($evaluations) {
+            $employee = $evaluations->first()->employee;
+            $subsIds = $employee->subordinates->pluck('id')->all();
+            $headsIds = $employee->heads->pluck('id')->all();
+            $coworkerIds = $employee->coworkers->pluck('id')->all();
+
+            // Helper function to determine evaluator type
+            $getEvaluatorType = function ($evaluatorId) use ($subsIds, $headsIds, $coworkerIds, $employee) {
+                if ($evaluatorId == $employee->id) {
+                    return 'Self';
+                } elseif (in_array($evaluatorId, $subsIds)) {
+                    return 'Subordinate';
+                } elseif (in_array($evaluatorId, $headsIds)) {
+                    return 'Head';
+                } elseif (in_array($evaluatorId, $coworkerIds)) {
+                    return 'Coworker';
+                }
+                return 'Other';
+            };
+
+            // Map each evaluation to detail view
+            $evaluationDetails = $evaluations->map(function ($eval) use ($getEvaluatorType) {
+                return [
+                    'evaluator_name' => $eval->evaluator->name ?? 'Unknown',
+                    // 'evaluator_type' => $getEvaluatorType($eval->evaluator_id),
+                    'question_1' => $eval->question_1,
+                    'question_2' => $eval->question_2,
+                    'question_3' => $eval->question_3,
+                    'question_4' => $eval->question_4,
+                    'question_5' => $eval->question_5,
+                    'question_6' => $eval->question_6,
+                    'question_7' => $eval->question_7,
+                    'question_8' => $eval->question_8,
+                    'question_9' => $eval->question_9,
+                    'question_10' => $eval->question_10,
+                ];
+            })->values();
+
+            return [
+                'employee_id' => $employee->employee_code ?? $employee->id,
+                'full_name' => $employee->name,
+                'organization' => $employee->department->name ?? '',
+                'job_position' => $employee->position->title ?? '',
+                'total_evaluations' => $evaluations->count(),
+                'evaluations' => $evaluationDetails,
+            ];
+        });
+
+        return response()->json($dataGroupedByEmployee->values());
+    }
+
+    public function exportEvaluationBreakdown(Request $request)
+    {
+        $periodId = $request->query('period_id');
+
+        if (!$periodId) {
+            return response()->json(['message' => 'period_id is required'], 400);
+        }
+
+        // Get all evaluations for the period with detailed question answers
+        $evaluations = Evaluation::select(
+            'id',
+            'employee_id',
+            'evaluator_id',
+            'question_1',
+            'question_2',
+            'question_3',
+            'question_4',
+            'question_5',
+            'question_6',
+            'question_7',
+            'question_8',
+            'question_9',
+            'question_10',
+        )
+        ->where('period_id', $periodId)
+        ->with(['employee', 'employee.department', 'employee.position', 'employee.heads', 'employee.subordinates', 'employee.coworkers', 'evaluator'])
+        ->get();
+
+        $dataGroupedByEmployee = $evaluations->groupBy('employee_id')->map(function ($evaluations) {
+            $employee = $evaluations->first()->employee;
+            $subsIds = $employee->subordinates->pluck('id')->all();
+            $headsIds = $employee->heads->pluck('id')->all();
+            $coworkerIds = $employee->coworkers->pluck('id')->all();
+
+            // Helper function to determine evaluator type
+            $getEvaluatorType = function ($evaluatorId) use ($subsIds, $headsIds, $coworkerIds, $employee) {
+                if ($evaluatorId == $employee->id) {
+                    return 'Self';
+                } elseif (in_array($evaluatorId, $subsIds)) {
+                    return 'Subordinate';
+                } elseif (in_array($evaluatorId, $headsIds)) {
+                    return 'Head';
+                } elseif (in_array($evaluatorId, $coworkerIds)) {
+                    return 'Coworker';
+                }
+                return 'Other';
+            };
+
+            $evaluationDetails = $evaluations->map(function ($eval) use ($getEvaluatorType) {
+                return [
+                    'evaluator_name' => $eval->evaluator->name ?? 'Unknown',
+                    // 'evaluator_type' => $getEvaluatorType($eval->evaluator_id),
+                    'question_1' => $eval->question_1,
+                    'question_2' => $eval->question_2,
+                    'question_3' => $eval->question_3,
+                    'question_4' => $eval->question_4,
+                    'question_5' => $eval->question_5,
+                    'question_6' => $eval->question_6,
+                    'question_7' => $eval->question_7,
+                    'question_8' => $eval->question_8,
+                    'question_9' => $eval->question_9,
+                    'question_10' => $eval->question_10,
+                ];
+            })->values();
+
+            return [
+                'employee_id' => $employee->employee_code ?? $employee->id,
+                'full_name' => $employee->name,
+                'organization' => $employee->department->name ?? '',
+                'job_position' => $employee->position->title ?? '',
+                'total_evaluations' => $evaluations->count(),
+                'evaluations' => $evaluationDetails,
+            ];
+        });
+
+        $headings = [
+            'NO', 'EMPLOYEE_ID', 'NAME', 'DEPARTMENT', 'POSITION', 'EVALUATOR', 
+            //'EVALUATOR_TYPE', 
+            'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10',
+        ];
+
+        $rows = [];
+        $no = 1;
+
+        foreach ($dataGroupedByEmployee as $employeeData) {
+            $firstEvaluation = true;
+            foreach ($employeeData['evaluations'] as $eval) {
+                $rows[] = [
+                    'no' => $firstEvaluation ? $no : '',
+                    'employee_id' => $firstEvaluation ? $employeeData['employee_id'] : '',
+                    'name' => $firstEvaluation ? $employeeData['full_name'] : '',
+                    'department' => $firstEvaluation ? $employeeData['organization'] : '',
+                    'position' => $firstEvaluation ? $employeeData['job_position'] : '',
+                    'evaluator' => $eval['evaluator_name'],
+                    // 'evaluator_type' => $eval['evaluator_type'],
+                    'q1' => $eval['question_1'],
+                    'q2' => $eval['question_2'],
+                    'q3' => $eval['question_3'],
+                    'q4' => $eval['question_4'],
+                    'q5' => $eval['question_5'],
+                    'q6' => $eval['question_6'],
+                    'q7' => $eval['question_7'],
+                    'q8' => $eval['question_8'],
+                    'q9' => $eval['question_9'],
+                    'q10' => $eval['question_10'],
+                ];
+                $firstEvaluation = false;
+            }
+            $no++;
+        }
+
+        // use PhpSpreadsheet directly
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+                
+        // write detail headings in row 1
+        for ($i = 0; $i < count($headings); $i++) {
+            $colLetter = Coordinate::stringFromColumnIndex($i + 1);
+            $sheet->setCellValue($colLetter.'1', $headings[$i]);
+        }
+        
+        // write data starting from row 2
+        $rowNum = 2;
+        foreach ($dataGroupedByEmployee as $employeeData) {
+            $startRow = $rowNum; // Catat baris awal karyawan ini
+            
+            foreach ($employeeData['evaluations'] as $index => $eval) {
+                // Isi data per baris
+                $sheet->setCellValue('A' . $rowNum, $index === 0 ? count(array_filter(array_map(fn($r) => $r['no'], array_slice($rows, 0, array_search($rowNum - 2, array_column($rows, 'no')) + 1)))) : '');
+                $sheet->setCellValue('B' . $rowNum, $index === 0 ? $employeeData['employee_id'] : '');
+                $sheet->setCellValue('C' . $rowNum, $index === 0 ? $employeeData['full_name'] : '');
+                $sheet->setCellValue('D' . $rowNum, $index === 0 ? $employeeData['organization'] : '');
+                $sheet->setCellValue('E' . $rowNum, $index === 0 ? $employeeData['job_position'] : '');
+                $sheet->setCellValue('F' . $rowNum, $eval['evaluator_name']);
+                // $sheet->setCellValue('G' . $rowNum, $eval['evaluator_type']);
+                $sheet->setCellValue('G' . $rowNum, $eval['question_1']);
+                $sheet->setCellValue('H' . $rowNum, $eval['question_2']);
+                $sheet->setCellValue('I' . $rowNum, $eval['question_3']);
+                $sheet->setCellValue('J' . $rowNum, $eval['question_4']);
+                $sheet->setCellValue('K' . $rowNum, $eval['question_5']);
+                $sheet->setCellValue('L' . $rowNum, $eval['question_6']);
+                $sheet->setCellValue('M' . $rowNum, $eval['question_7']);
+                $sheet->setCellValue('N' . $rowNum, $eval['question_8']);
+                $sheet->setCellValue('O' . $rowNum, $eval['question_9']);
+                $sheet->setCellValue('P' . $rowNum, $eval['question_10']);
+                
+                $rowNum++;
+            }
+            
+            $endRow = $rowNum - 1; // Baris terakhir untuk karyawan ini
+
+            // Lakukan Merge Vertical dari kolom A sampai E jika evaluasi lebih dari satu
+            if ($startRow < $endRow) {
+                foreach (['A', 'B', 'C', 'D', 'E'] as $col) {
+                    $sheet->mergeCells($col . $startRow . ':' . $col . $endRow);
+                }
+            }
+
+            // Set Center Alignment (Horizontal & Vertikal) untuk kolom yang di-merge
+            $sheet->getStyle('A' . $startRow . ':E' . $endRow)->applyFromArray([
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+            ]);
+        }
+
+        // --- STYLING BORDER ---
+        
+        // 1. Dapatkan kolom terakhir dan baris terakhir
+        $lastColumnLetter = Coordinate::stringFromColumnIndex(count($headings));
+        $lastRow = $rowNum - 1;
+        $tableRange = 'A1:' . $lastColumnLetter . $lastRow;
+
+        // 2. Terapkan border ke seluruh tabel
+        $sheet->getStyle($tableRange)->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF000000'], // Warna hitam
+                ],
+            ],
+        ]);
+
+        // 3. Bikin text Header (baris 1) jadi tebal dan center agar lebih rapi
+        $headerRange = 'A1:' . $lastColumnLetter . '1';
+        $sheet->getStyle($headerRange)->applyFromArray([
+            'font' => [
+                'bold' => true,
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        // Auto fit columns
+        foreach (range('A', $lastColumnLetter) as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        // prepare streaming response
+        $filename = 'evaluation-breakdown.xlsx';
+
+        return response()->streamDownload(function() use ($spreadsheet) {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
+    }
 }

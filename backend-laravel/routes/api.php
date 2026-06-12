@@ -44,4 +44,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/evaluation-summary/export', [EvaluationController::class, 'exportEvaluationSummary']);
     Route::get('/reports/comments-summary', [EvaluationController::class, 'commentsSummary']);
     Route::get('/reports/comments-summary/export', [EvaluationController::class, 'exportCommentsSummary']);
+    Route::get('/reports/evaluation-breakdown', [EvaluationController::class, 'evaluationBreakdown']);
+    Route::get('/reports/evaluation-breakdown/export', [EvaluationController::class, 'exportEvaluationBreakdown']);
 });

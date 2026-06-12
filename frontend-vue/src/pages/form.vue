@@ -26,7 +26,7 @@ const evaluationStore = useEvaluationStore();
 
 const employeeId = route.query.employeeId as string | undefined;
 const periodId = route.query.periodId as string | undefined;
-const evaluatorId = authStore.user?.employee_id
+const evaluatorId = route.query.evaluatorId as string ?? authStore.user?.employee_id;
 const evaluationId = ref(null);
 
 const isLoading = ref(false);

@@ -15,8 +15,10 @@ const toast = useToast();
 const selectedPeriodId = ref<string | undefined>(undefined);
 const loadingEvaluation = ref(false);
 const loadingComments = ref(false);
+const loadingEvaluationBreakdown = ref(false);
 const evaluationData = ref([]);
 const commentsData = ref([]);
+const evaluationBreakdownData = ref([]);
 
 // --- COMPUTED ---
 const periods = computed(() => periodStore.periodOptions);
@@ -26,6 +28,9 @@ const evaluationReportReady = computed(
 );
 const commentsReportReady = computed(
   () => selectedPeriodId.value && commentsData.value.length > 0
+);
+const evaluationBreakdownReady = computed(
+  () => selectedPeriodId.value && evaluationBreakdownData.value.length > 0
 );
 
 // --- ACTIONS ---
@@ -41,6 +46,7 @@ async function loadReports() {
 
   loadingEvaluation.value = true;
   loadingComments.value = true;
+  loadingEvaluationBreakdown.value = true;
 
   try {
     // Load Evaluation Summary Report
@@ -69,6 +75,14 @@ async function loadReports() {
     console.log("Comments Summary Response:", commentsResponse);
     commentsData.value = commentsResponse.data || [];
 
+    const breakdownResponse = await api.get("/reports/evaluation-breakdown", {
+      params: {
+        period_id: selectedPeriodId.value,
+      },
+    });
+    console.log("Evaluation Breakdown Response:", breakdownResponse);
+    evaluationBreakdownData.value = breakdownResponse.data || [];
+
     toast.add({
       title: "Success",
       description: "Reports loaded successfully",
@@ -84,6 +98,7 @@ async function loadReports() {
   } finally {
     loadingEvaluation.value = false;
     loadingComments.value = false;
+    loadingEvaluationBreakdown.value = false;
   }
 }
 
@@ -153,6 +168,41 @@ async function exportCommentsReport(format: "pdf" | "xlsx") {
     toast.add({
       title: "Error",
       description: "Failed to export comments report",
+      color: "error",
+    });
+  }
+}
+
+async function exportEvaluationBreakdown(format: "pdf" | "xlsx") {
+  if (!selectedPeriodId.value) return;
+
+  try {
+    const response = await api.get("/reports/evaluation-breakdown/export", {
+      params: {
+        period_id: selectedPeriodId.value,
+        format,
+      },
+      responseType: "blob",
+    });
+
+    const blob = response.data;
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Evaluation-Breakdown.${format}`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+
+    toast.add({
+      title: "Success",
+      description: `Evaluation Breakdown exported as ${format.toUpperCase()}`,
+      color: "success",
+    });
+  } catch (error) {
+    console.error("Error exporting evaluation breakdown:", error);
+    toast.add({
+      title: "Error",
+      description: "Failed to export evaluation breakdown",
       color: "error",
     });
   }
@@ -422,6 +472,85 @@ initialLoad();
                 :loading="loadingComments"
                 class="flex-1 cursor-pointer justify-center"
                 @click="exportCommentsReport('xlsx')"
+              />
+            </div>
+          </template>
+        </UCard>
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <UIcon name="i-lucide-bar-chart" class="w-5 h-5" />
+                <h3 class="font-semibold">Evaluation Breakdown</h3>
+              </div>
+              <UBadge
+                v-if="evaluationBreakdownReady"
+                color="success"
+                variant="subtle"
+              >
+                Ready
+              </UBadge>
+              <UBadge v-else color="gray" variant="subtle"> Not Ready </UBadge>
+            </div>
+          </template>
+
+          <div class="space-y-4">
+            <p class="text-sm text-gray-600">
+              Breakdown of all evaluation comments from reviewers
+            </p>
+
+            <div
+              v-if="loadingEvaluationBreakdown"
+              class="flex items-center justify-center py-8"
+            >
+              <UIcon
+                name="i-lucide-loader-circle"
+                class="w-5 h-5 animate-spin"
+              />
+              <span class="ml-2">Loading report...</span>
+            </div>
+
+            <div v-else-if="evaluationBreakdownData.length > 0" class="space-y-2">
+              <p class="text-xs text-gray-500">
+                Total Evaluation: {{ evaluationBreakdownData.length }}
+              </p>
+            </div>
+
+            <div v-else class="py-6 text-center text-gray-500">
+              <p v-if="selectedPeriodId" class="text-sm">
+                No data available for this period
+              </p>
+              <p v-else class="text-sm">
+                Select a period to generate the report
+              </p>
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="flex gap-2">
+              <UButton
+                label="Load Report"
+                icon="i-lucide-refresh-cw"
+                color="primary"
+                variant="soft"
+                size="sm"
+                :disabled="!selectedPeriodId || loadingEvaluationBreakdown"
+                :loading="loadingEvaluationBreakdown"
+                class="flex-1 cursor-pointer justify-center"
+                @click="loadReports"
+              />
+            </div>
+            <div class="flex gap-2 mt-2">
+              <UButton
+                label="Export"
+                icon="i-lucide-file-spreadsheet"
+                color="success"
+                variant="soft"
+                size="sm"
+                :disabled="!evaluationBreakdownReady"
+                :loading="loadingEvaluationBreakdown"
+                class="flex-1 cursor-pointer justify-center"
+                @click="exportEvaluationBreakdown('xlsx')"
               />
             </div>
           </template>

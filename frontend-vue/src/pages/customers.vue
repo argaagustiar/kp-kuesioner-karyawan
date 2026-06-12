@@ -496,6 +496,13 @@ function onPageChange(newPage: number) {
   loadData()
 }
 
+function showEvaluationByEvaluator(evaluatorId: string) {
+  router.push({
+    path: '/form',
+    query: { employeeId: selectedEmployeeId.value, periodId: selectedPeriodId.value, evaluatorId }
+  })
+}
+
 loadData()
 
 watch(sorting, () => {
@@ -660,7 +667,7 @@ watch(sorting, () => {
         </div> -->
         
         <div class="grid gap-3">
-          <UCard v-for="evaluator in evaluationData.evaluators" :key="evaluator.id" class="p-4">
+          <UCard v-for="evaluator in evaluationData.evaluators" :key="evaluator.id" @click="showEvaluationByEvaluator(evaluator.id)" class="p-4 cursor-pointer">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
                 <UAvatar :name="evaluator.name" size="sm" />
