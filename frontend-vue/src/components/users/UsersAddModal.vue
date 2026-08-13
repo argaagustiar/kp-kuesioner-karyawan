@@ -15,7 +15,7 @@ const schema = z.object({
   position_id: z.string({ message: 'Required' }),
   department_id: z.string({ message: 'Required' }), // Anggap primary department dulu
   join_date: z.custom<CalendarDate>((v) => v instanceof CalendarDate, 'Join date is required'),
-  end_contract_date: z.custom<CalendarDate>((v) => v instanceof CalendarDate, 'End contract date is required'),
+  end_contract_date: z.custom<CalendarDate | null | undefined>((v) => v === undefined || v === null || v instanceof CalendarDate, 'End contract date is invalid').optional(),
   is_active: z.boolean()
 })
 
@@ -86,7 +86,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   const payload = {
     ...event.data,
     join_date: event.data.join_date.toString(),
-    end_contract_date: event.data.end_contract_date.toString(),
+    end_contract_date: event.data.end_contract_date ? event.data.end_contract_date.toString() : null,
 
     departments: [
       { 
@@ -245,7 +245,7 @@ watch(() => props.modelValue, (isOpen) => {
             </UPopover>
           </UFormField>
 
-          <UFormField label="End Contract Date" name="end_contract_date" required>
+          <UFormField label="End Contract Date" name="end_contract_date">
             <UPopover :ui="{ content: 'p-0' }">
               <UButton
                 color="neutral"
@@ -254,7 +254,7 @@ watch(() => props.modelValue, (isOpen) => {
                 class="w-full justify-start text-left font-normal"
                 :class="!state.end_contract_date && 'text-gray-500'"
               >
-                {{ state.end_contract_date ? df.format(state.end_contract_date.toDate(getLocalTimeZone())) : 'Select date' }}
+                {{ state.end_contract_date ? df.format(state.end_contract_date.toDate(getLocalTimeZone())) : 'Select date (optional)' }}
               </UButton>
               <template #content>
                 <UCalendar v-model="state.end_contract_date" class="p-2" />
