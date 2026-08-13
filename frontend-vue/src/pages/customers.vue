@@ -77,6 +77,11 @@ function openEditModal(employee: any) {
   showModal.value = true
 }
 
+function openCreateModal(employee: any) {
+  console.log('Employee Data:', employee)
+  showModal.value = true
+}
+
 const columnFilters = ref([{
   id: 'name',
   value: ''
