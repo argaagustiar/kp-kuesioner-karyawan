@@ -24,7 +24,7 @@ class DepartmentController extends Controller
             $query->whereNull('parent_id')->with('children');
         }
 
-        return DepartmentResource::collection($query->orderBy('name')->paginate(10));
+        return DepartmentResource::collection($query->orderBy('name')->get());
     }
 
     public function store(StoreDepartmentRequest $request)
