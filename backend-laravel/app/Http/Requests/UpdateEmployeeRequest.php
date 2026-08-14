@@ -38,7 +38,7 @@ class UpdateEmployeeRequest extends FormRequest
             ],
             'position_id' => 'required|exists:positions,id',
             'join_date' => 'required|date',
-            'end_contract_date' => 'required|date|after_or_equal:join_date',
+            'end_contract_date' => 'nullable|date|after_or_equal:join_date',
             'is_active' => 'boolean',
             
             'departments' => 'array',
