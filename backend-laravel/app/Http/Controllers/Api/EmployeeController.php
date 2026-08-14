@@ -112,7 +112,7 @@ class EmployeeController extends Controller
             }
 
             // Load relations agar response lengkap
-            $employee->load(['position', 'department', 'managers']);
+            $employee->load(['position', 'department']);
 
             return new EmployeeResource($employee);
         });
