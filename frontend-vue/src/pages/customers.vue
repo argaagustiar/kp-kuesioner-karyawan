@@ -354,6 +354,26 @@ const columns: TableColumn<Department>[] = [
     },
     cell: ({ row }) => row.original.position?.title
   },
+  {
+    accessorKey: 'department',
+    header: ({ column }) => {
+      const isSorted = column.getIsSorted()
+
+      return h(UButton, {
+        color: 'neutral',
+        variant: 'ghost',
+        label: 'Department',
+        icon: isSorted
+          ? isSorted === 'asc'
+            ? 'i-lucide-arrow-up-narrow-wide'
+            : 'i-lucide-arrow-down-wide-narrow'
+          : 'i-lucide-arrow-up-down',
+        class: '-mx-2.5 cursor-pointer',
+        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
+      })
+    },
+    cell: ({ row }) => row.original.department?.name
+  },
   // {
   //   accessorKey: 'status',
   //   header: 'Status',
