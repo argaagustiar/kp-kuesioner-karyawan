@@ -78,6 +78,28 @@ const state = reactive<Partial<Schema>>({
   is_active: true // Default active
 })
 
+function normalizeDate(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value
+  }
+
+  const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/)
+  if (!match) {
+    throw new Error(`Unsupported date format: ${value}`)
+  }
+
+  const months: Record<string, string> = {
+    Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+  }
+  const month = months[match[2]]
+  if (!month) {
+    throw new Error(`Unsupported month: ${match[2]}`)
+  }
+
+  return `${match[3]}-${month}-${match[1].padStart(2, '0')}`
+}
+
 // 4. Submit Handler
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   // Disini nanti panggil employeeStore.createEmployee(event.data)
@@ -133,22 +155,26 @@ watch(() => props.modelValue, (isOpen) => {
       // Logic isi form untuk Edit
       Object.assign(state, props.initialData)
       if (props.initialData.join_date) {
-        state.join_date = parseDate(props.initialData.join_date)
+        state.join_date = parseDate(normalizeDate(props.initialData.join_date))
       }
 
       if (props.initialData.end_contract_date) {
-        state.end_contract_date = parseDate(props.initialData.end_contract_date)
+        state.end_contract_date = parseDate(normalizeDate(props.initialData.end_contract_date))
       }
 
       if (props.initialData.position) {
         state.position_id = props.initialData.position.id
       }
 
-      if (props.initialData.departments && props.initialData.departments.length > 0) {
-        const primaryDept = props.initialData.departments.find((d: any) => d.is_primary)
-        
-        state.department_id = primaryDept ? primaryDept.id : props.initialData.departments[0].id
+      if (props.initialData.position) {
+        state.department_id = props.initialData.department.id
       }
+
+      // if (props.initialData.departments && props.initialData.departments.length > 0) {
+      //   const primaryDept = props.initialData.departments.find((d: any) => d.is_primary)
+        
+      //   state.department_id = primaryDept ? primaryDept.id : props.initialData.departments[0].id
+      // }
     } else {
       // Logic reset form untuk New
       state.name = undefined

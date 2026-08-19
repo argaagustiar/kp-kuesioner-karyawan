@@ -103,13 +103,13 @@ class EmployeeController extends Controller
             }
 
             // 3. Sync Managers (Many-to-Many Pivot)
-            if ($request->has('managers')) {
-                $managerSyncData = [];
-                foreach ($request->managers as $mgr) {
-                    $managerSyncData[$mgr['id']] = ['reporting_type' => $mgr['reporting_type'] ?? 'direct'];
-                }
-                $employee->managers()->sync($managerSyncData);
-            }
+            // if ($request->has('managers')) {
+            //     $managerSyncData = [];
+            //     foreach ($request->managers as $mgr) {
+            //         $managerSyncData[$mgr['id']] = ['reporting_type' => $mgr['reporting_type'] ?? 'direct'];
+            //     }
+            //     $employee->managers()->sync($managerSyncData);
+            // }
 
             // Load relations agar response lengkap
             $employee->load(['position', 'department']);
@@ -135,25 +135,25 @@ class EmployeeController extends Controller
             $employee->update($request->validated());
 
             // 2. Sync Departments (Hapus yang lama, pasang yang baru sesuai input)
-            if ($request->has('department')) {
-                $deptSyncData = [];
-                foreach ($request->departments as $dept) {
-                    $deptSyncData[$dept['id']] = ['is_primary' => $dept['is_primary'] ?? false];
-                }
-                $employee->departments()->sync($deptSyncData);
-            }
+            // if ($request->has('department')) {
+            //     $deptSyncData = [];
+            //     foreach ($request->departments as $dept) {
+            //         $deptSyncData[$dept['id']] = ['is_primary' => $dept['is_primary'] ?? false];
+            //     }
+            //     $employee->departments()->sync($deptSyncData);
+            // }
 
             // 3. Sync Managers
-            if ($request->has('managers')) {
-                $managerSyncData = [];
-                foreach ($request->managers as $mgr) {
-                    $managerSyncData[$mgr['id']] = ['reporting_type' => $mgr['reporting_type'] ?? 'direct'];
-                }
-                $employee->managers()->sync($managerSyncData);
-            }
+            // if ($request->has('managers')) {
+            //     $managerSyncData = [];
+            //     foreach ($request->managers as $mgr) {
+            //         $managerSyncData[$mgr['id']] = ['reporting_type' => $mgr['reporting_type'] ?? 'direct'];
+            //     }
+            //     $employee->managers()->sync($managerSyncData);
+            // }
 
             // Refresh data terbaru
-            $employee->refresh()->load(['position', 'department', 'managers']);
+            $employee->refresh()->load(['position', 'department']);
 
             return new EmployeeResource($employee);
         });

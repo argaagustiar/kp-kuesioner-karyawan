@@ -51,7 +51,8 @@ const evaluationData = ref(null)
 const periods = computed(() => periodStore.periodOptions)
 const employees = computed(() => employeeStore.employees.map(e => ({
   ...e,
-  join_date: e.join_date ? formatDate.format(new Date(e.join_date)) : null
+  join_date: e.join_date ? formatDate.format(new Date(e.join_date)) : null,
+  end_contract_date: e.end_contract_date ? formatDate.format(new Date(e.end_contract_date)) : null
 })))
 
 function openAllEvaluationModal() {
@@ -378,6 +379,25 @@ const columns: TableColumn<Department>[] = [
         color: 'neutral',
         variant: 'ghost',
         label: 'Join Date',
+        icon: isSorted
+          ? isSorted === 'asc'
+            ? 'i-lucide-arrow-up-narrow-wide'
+            : 'i-lucide-arrow-down-wide-narrow'
+          : 'i-lucide-arrow-up-down',
+        class: '-mx-2.5 cursor-pointer',
+        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
+      })
+    },
+  },
+  {
+    accessorKey: 'end_contract_date',
+    header: ({ column }) => {
+      const isSorted = column.getIsSorted()
+
+      return h(UButton, {
+        color: 'neutral',
+        variant: 'ghost',
+        label: 'End Contract Date',
         icon: isSorted
           ? isSorted === 'asc'
             ? 'i-lucide-arrow-up-narrow-wide'
