@@ -49,6 +49,7 @@ const showEvaluationModal = ref(false)
 const evaluationData = ref(null)
 
 const periods = computed(() => periodStore.periodOptions)
+const selectedPeriod = computed(() => periods.value.find(period => period.id === selectedPeriodId.value))
 const employees = computed(() => employeeStore.employees.map(e => ({
   ...e,
   join_date: e.join_date ? formatDate.format(new Date(e.join_date)) : null,
@@ -168,7 +169,7 @@ function getRowItems(row: Row<User>) {
   // 3. Kondisi Khusus: EVALUATE (Misalnya untuk 'manager' atau 'hr')
   // Kita gunakan .includes jika role yang diizinkan lebih dari satu
   // if (['hr', 'hr2', 'employee'].includes(userRole)) {
-  if (['hr', 'hr2'].includes(userRole)) { //untuk lock evaluasi
+  if (['hr', 'hr2'].includes(userRole) || (userRole === 'employee' && !selectedPeriod.value?.evaluation_locked)) { // lock hanya berlaku untuk employee
     // Tambahkan separator dulu agar rapi
     items.push({ type: 'separator' })
     

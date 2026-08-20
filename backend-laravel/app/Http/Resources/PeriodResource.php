@@ -14,6 +14,7 @@ class PeriodResource extends JsonResource
             'start_date' => $this->start_date->format('Y-m-d'),
             'end_date' => $this->end_date->format('Y-m-d'),
             'description' => $this->description,
+            'evaluation_locked' => (bool) $this->evaluation_locked,
         ];
     }
 }

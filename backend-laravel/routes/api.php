@@ -29,6 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('departments', DepartmentController::class);
     Route::apiResource('positions', PositionController::class);
     Route::apiResource('periods', PeriodController::class);
+    Route::patch('periods/{id}/evaluation-lock', [PeriodController::class, 'updateEvaluationLock']);
     Route::apiResource('evaluations', EvaluationController::class);
     Route::apiResource('attendance-records', AttendaceRecordController::class);
     

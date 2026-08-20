@@ -41,6 +41,22 @@ class PeriodController extends Controller
         return new PeriodResource($period);
     }
 
+    public function updateEvaluationLock(Request $request, $id)
+    {
+        if ($request->user()->role !== 'admin') {
+            abort(403, 'Only admins can lock or unlock evaluations.');
+        }
+
+        $validated = $request->validate([
+            'locked' => ['required', 'boolean'],
+        ]);
+
+        $period = Period::findOrFail($id);
+        $period->update(['evaluation_locked' => $validated['locked']]);
+
+        return new PeriodResource($period->refresh());
+    }
+
     public function destroy($id)
     {
         $period = Period::findOrFail($id);

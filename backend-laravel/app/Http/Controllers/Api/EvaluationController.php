@@ -56,6 +56,11 @@ class EvaluationController extends Controller
 
     public function store(StoreEvaluationRequest $request)
     {
+        $period = Period::findOrFail($request->validated()['period_id']);
+        if ($request->user()->role === 'employee' && $period->evaluation_locked) {
+            return response()->json(['message' => 'Evaluation is locked for this period.'], 423);
+        }
+
         return DB::transaction(function () use ($request) {
             $evaluation = Evaluation::create($request->validated());
 
@@ -74,6 +79,11 @@ class EvaluationController extends Controller
     public function update(UpdateEvaluationRequest $request, $id)
     {
         $evaluation = Evaluation::findOrFail($id);
+
+        $period = Period::findOrFail($request->validated()['period_id']);
+        if ($request->user()->role === 'employee' && $period->evaluation_locked) {
+            return response()->json(['message' => 'Evaluation is locked for this period.'], 423);
+        }
 
         return DB::transaction(function () use ($request, $evaluation) {
             $evaluation->update($request->validated());

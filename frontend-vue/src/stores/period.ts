@@ -11,6 +11,7 @@ export interface Period {
     start_date: string;
     end_date: string;
     description?: string;
+    evaluation_locked: boolean;
 }
 
 const formatDate = new DateFormatter("id-ID", { dateStyle: "medium" });
@@ -33,7 +34,8 @@ export const usePeriodStore = defineStore('period', {
         // Helper untuk dropdown (format { label, id })
         periodOptions: (state) => state.periods.map(p => ({
             label: `${formatDate.format(new Date(p.start_date))} - ${formatDate.format(new Date(p.end_date))}`,
-            id: p.id
+            id: p.id,
+            evaluation_locked: p.evaluation_locked
         }))
     },
 
@@ -128,6 +130,21 @@ export const usePeriodStore = defineStore('period', {
             } finally {
                 this.loading = false
             }
+        },
+
+        async updateEvaluationLock(id: string, locked: boolean) {
+            const response = await api.patch(`/periods/${id}/evaluation-lock`, { locked })
+            const updatedPeriod = response.data.data
+            const index = this.periods.findIndex(p => p.id === id)
+
+            if (index !== -1) {
+                this.periods[index] = updatedPeriod
+            }
+            if (this.period?.id === id) {
+                this.period = updatedPeriod
+            }
+
+            return updatedPeriod
         },
 
         // 6. DELETE (Manual)

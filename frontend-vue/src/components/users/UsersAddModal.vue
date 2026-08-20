@@ -90,7 +90,8 @@ function normalizeDate(value: string): string {
 
   const months: Record<string, string> = {
     Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
-    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+    Mei: '05', Agu: '08', Okt: '10', Des: '12' // Indonesian abbreviations
   }
   const month = months[match[2]]
   if (!month) {

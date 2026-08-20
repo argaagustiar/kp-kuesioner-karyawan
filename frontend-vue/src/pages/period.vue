@@ -93,6 +93,28 @@ async function handleDelete(period: any) {
   }
 }
 
+async function toggleEvaluationLock(period: any) {
+  const locked = !period.evaluation_locked
+
+  try {
+    await periodStore.updateEvaluationLock(period.id, locked)
+    toast.add({
+      title: locked ? "Evaluation locked" : "Evaluation unlocked",
+      description: locked
+        ? "New and existing evaluations can no longer be saved for this period."
+        : "Evaluations can be saved again for this period.",
+      color: "success",
+    })
+  } catch (error: any) {
+    console.error("Error updating evaluation lock:", error)
+    toast.add({
+      title: "Error",
+      description: error.response?.data?.message || "Failed to update evaluation lock.",
+      color: "error",
+    })
+  }
+}
+
 // --- TABLE CONFIG ---
 const columnFilters = ref([{ id: "description", value: "" }]);
 const columnVisibility = ref();
@@ -128,6 +150,15 @@ function getRowItems(row: any) {
         onSelect: () => handleDelete(row.original),
       }
     );
+  }
+
+  if (userRole === "admin") {
+    items.push({
+      label: row.original.evaluation_locked ? "Unlock Evaluation" : "Lock Evaluation",
+      icon: row.original.evaluation_locked ? "i-lucide-lock-open" : "i-lucide-lock",
+      class: "cursor-pointer",
+      onSelect: () => toggleEvaluationLock(row.original),
+    });
   }
 
   return items;
@@ -217,21 +248,19 @@ const columns: TableColumn<any>[] = [
     },
     cell: ({ row }) => row.original.end_date_fmt,
   },
-  //   {
-  //     accessorKey: "is_active",
-  //     header: "Status",
-  //     cell: ({ row }) => {
-  //       return h(
-  //         UBadge,
-  //         {
-  //           variant: "subtle",
-  //           color: row.original.is_active ? "success" : "neutral",
-  //           class: "capitalize",
-  //         },
-  //         () => (row.original.is_active ? "Active" : "Closed")
-  //       );
-  //     },
-  //   },
+  {
+    accessorKey: "evaluation_locked",
+    header: "Evaluation",
+    cell: ({ row }) => h(
+      UBadge,
+      {
+        variant: "subtle",
+        color: row.original.evaluation_locked ? "error" : "success",
+        class: "capitalize",
+      },
+      () => row.original.evaluation_locked ? "Locked" : "Open"
+    ),
+  },
   {
     id: "actions",
     cell: ({ row }) =>

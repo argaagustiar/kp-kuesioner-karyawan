@@ -28,6 +28,8 @@ const employeeId = route.query.employeeId as string | undefined;
 const periodId = route.query.periodId as string | undefined;
 const evaluatorId = route.query.evaluatorId as string ?? authStore.user?.employee_id;
 const evaluationId = ref(null);
+const evaluationLocked = ref(false);
+const isEmployee = computed(() => authStore.user?.role === 'employee');
 
 const isLoading = ref(false);
 
@@ -285,6 +287,15 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     return;
   }
 
+  if (isEmployee.value && evaluationLocked.value) {
+    toast.add({
+      title: "Evaluation locked",
+      description: "This evaluation period is locked by an administrator.",
+      color: "warning",
+    });
+    return;
+  }
+
   isLoading.value = true;
   const payload = {
     id: evaluationId.value,
@@ -349,6 +360,7 @@ async function loadEmployeeData() {
 
   const period = await periodStore.fetchPeriod(periodId);
   if (period) {
+    evaluationLocked.value = period.evaluation_locked;
     state.period_cutoff = {
       start: parseDate(period.start_date),
       end: parseDate(period.end_date),
@@ -428,6 +440,14 @@ if (employeeId) {
     </template>
 
     <template #body>
+      <UAlert
+        v-if="isEmployee && evaluationLocked"
+        color="warning"
+        icon="i-lucide-lock"
+        title="Evaluation locked"
+        description="This period is locked by an administrator. You can view the form but cannot save changes."
+        class="mb-4"
+      />
       <h1 class="text-center text-4xl font-bold">Penilaian Kinerja Karyawan (Performance Evaluation)</h1>
       <h1 class="text-center text-4xl font-bold">PT. Kanepackage Indonesia</h1>
 

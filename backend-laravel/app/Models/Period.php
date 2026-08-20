@@ -12,11 +12,12 @@ class Period extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
-    protected $fillable = ['start_date', 'end_date', 'description'];
+    protected $fillable = ['start_date', 'end_date', 'description', 'evaluation_locked'];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'evaluation_locked' => 'boolean',
     ];
 
     public function attendanceRecords(): HasMany
