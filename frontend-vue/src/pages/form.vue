@@ -550,6 +550,7 @@ if (employeeId) {
                 variant="subtle"
                 icon="i-lucide-calendar-days"
                 class="w-64 min-w-[120px] justify-start text-left font-normal"
+                disabled
               >
                 {{ rangeLabel }}
               </UButton>
@@ -577,6 +578,7 @@ if (employeeId) {
                 icon="i-lucide-calendar"
                 class="w-64 min-w-[120px] justify-start text-left font-normal cursor-pointer"
                 :class="!state.end_contract && 'text-gray-500'"
+                disabled
               >
                 {{
                   state.end_contract
