@@ -32,6 +32,24 @@ const search = ref("");
 const userRole = authStore.user?.role || "guest";
 const periodDesc = ref("");
 const showUploadModal = ref(false);
+const showEditModal = ref(false);
+const editingAttendanceId = ref<string | null>(null);
+const editingAttendance = ref({
+  employee_name: "",
+  sick: 0,
+  work_accident: 0,
+  permit: 0,
+  awol: 0,
+  late_permit: 0,
+  early_leave: 0,
+  annual_leave: 0,
+  late: 0,
+  warning_letter_1: 0,
+  warning_letter_2: 0,
+  warning_letter_3: 0,
+  subordinate_late: 0,
+  subordinate_awol: 0,
+});
 
 // Attendance state
 const route = useRoute();
@@ -67,8 +85,28 @@ function openCreateModal() {
   // noop for attendance page
 }
 
-function openEditModal(period: any) {
-  // noop for attendance page
+function openEditModal(record: any) {
+  if (!record) return;
+
+  editingAttendanceId.value = record.id;
+  editingAttendance.value = {
+    employee_name: record.employee?.name || record.employee_name || "-",
+    sick: Number(record.sick) || 0,
+    work_accident: Number(record.work_accident) || 0,
+    permit: Number(record.permit) || 0,
+    awol: Number(record.awol) || 0,
+    late_permit: Number(record.late_permit) || 0,
+    early_leave: Number(record.early_leave) || 0,
+    annual_leave: Number(record.annual_leave) || 0,
+    late: Number(record.late) || 0,
+    warning_letter_1: Number(record.warning_letter_1) || 0,
+    warning_letter_2: Number(record.warning_letter_2) || 0,
+    warning_letter_3: Number(record.warning_letter_3) || 0,
+    subordinate_late: Number(record.subordinate_late) || 0,
+    subordinate_awol: Number(record.subordinate_awol) || 0,
+  };
+
+  showEditModal.value = true;
 }
 
 async function handleDelete(period: any) {
@@ -77,6 +115,62 @@ async function handleDelete(period: any) {
 
 function openUploadModal() {
   showUploadModal.value = true;
+}
+
+async function saveAttendanceEdit() {
+  if (!editingAttendanceId.value || !periodId.value) {
+    return;
+  }
+
+  const selectedRecord = attendanceRecords.value.find(
+    (record) => record.id === editingAttendanceId.value
+  );
+
+  if (!selectedRecord) {
+    return;
+  }
+
+  loading.value = true;
+
+  try {
+    await api.put(`/attendance-records/${editingAttendanceId.value}`, {
+      period_id: periodId.value,
+      employee_id: selectedRecord.employee_id,
+      sick: Number(editingAttendance.value.sick) || 0,
+      work_accident: Number(editingAttendance.value.work_accident) || 0,
+      permit: Number(editingAttendance.value.permit) || 0,
+      awol: Number(editingAttendance.value.awol) || 0,
+      late_permit: Number(editingAttendance.value.late_permit) || 0,
+      early_leave: Number(editingAttendance.value.early_leave) || 0,
+      annual_leave: Number(editingAttendance.value.annual_leave) || 0,
+      late: Number(editingAttendance.value.late) || 0,
+      warning_letter_1: Number(editingAttendance.value.warning_letter_1) || 0,
+      warning_letter_2: Number(editingAttendance.value.warning_letter_2) || 0,
+      warning_letter_3: Number(editingAttendance.value.warning_letter_3) || 0,
+      subordinate_late: Number(editingAttendance.value.subordinate_late) || 0,
+      subordinate_awol: Number(editingAttendance.value.subordinate_awol) || 0,
+    });
+
+    toast.add({
+      title: "Attendance updated",
+      description: "Attendance data has been updated successfully.",
+      color: "success",
+    });
+
+    showEditModal.value = false;
+    await loadData();
+  } catch (error: any) {
+    console.error("Error updating attendance record:", error);
+    toast.add({
+      title: "Error",
+      description:
+        error.response?.data?.message ||
+        "Failed to update attendance record.",
+      color: "error",
+    });
+  } finally {
+    loading.value = false;
+  }
 }
 
 // --- TABLE CONFIG ---
@@ -91,30 +185,21 @@ function getRowItems(row: any) {
   const items: any[] = [{ type: "label", label: "Actions" }];
 
   // Hanya Admin/HR yang bisa edit/delete periode
-  if (["admin", "hr", "hr_manager"].includes(userRole)) {
+  if (["admin", "hr", "hr2"].includes(userRole)) {
     items.push(
-      {
-        label: "Attendance",
-        icon: "i-lucide-list-check",
-        class: "cursor-pointer",
-        onSelect: () => {
-          router.push(`/attendance?period_id=${row.original.id}`);
-        },
-      },
-
       {
         label: "Edit",
         icon: "i-lucide-edit-2",
         class: "cursor-pointer",
         onSelect: () => openEditModal(row.original),
       },
-      {
-        label: "Delete",
-        icon: "i-lucide-trash",
-        class: "cursor-pointer",
-        color: "error",
-        onSelect: () => handleDelete(row.original),
-      }
+      // {
+      //   label: "Delete",
+      //   icon: "i-lucide-trash",
+      //   class: "cursor-pointer",
+      //   color: "error",
+      //   onSelect: () => handleDelete(row.original),
+      // }
     );
   }
 
@@ -181,6 +266,29 @@ const columns: TableColumn<any>[] = [
     accessorKey: "subordinate_awol",
     header: "Subordinate AWOL",
     cell: ({ row }) => row.original.subordinate_awol,
+  },
+  {
+    id: "actions",
+    header: "Actions",
+    cell: ({ row }) =>
+      h(
+        "div",
+        { class: "text-right" },
+        h(
+          UDropdownMenu,
+          {
+            content: { align: "end" },
+            items: getRowItems(row),
+          },
+          () =>
+            h(UButton, {
+              icon: "i-lucide-ellipsis-vertical",
+              color: "neutral",
+              variant: "ghost",
+              class: "cursor-pointer",
+            })
+        )
+      ),
   },
 ];
 
@@ -360,4 +468,80 @@ loadData();
       </div>
     </template>
   </UDashboardPanel>
+
+  <UModal
+    v-model:open="showEditModal"
+    title="Edit Attendance"
+    :description="`Update attendance for ${editingAttendance.employee_name}`"
+    :ui="{ content: 'sm:max-w-4xl' }"
+  >
+    <template #body>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2">
+          <label class="text-sm font-medium text-default">Employee</label>
+          <div class="mt-1 rounded-md border border-default bg-muted/30 px-3 py-2 text-sm">
+            {{ editingAttendance.employee_name }}
+          </div>
+        </div>
+
+        <UFormField label="Sick">
+          <UInput v-model.number="editingAttendance.sick" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Work Accident">
+          <UInput v-model.number="editingAttendance.work_accident" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Permit">
+          <UInput v-model.number="editingAttendance.permit" type="number" min="0" />
+        </UFormField>
+        <UFormField label="AWOL">
+          <UInput v-model.number="editingAttendance.awol" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Late Permit">
+          <UInput v-model.number="editingAttendance.late_permit" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Early Leave">
+          <UInput v-model.number="editingAttendance.early_leave" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Annual Leave">
+          <UInput v-model.number="editingAttendance.annual_leave" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Late">
+          <UInput v-model.number="editingAttendance.late" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Warning Letter 1">
+          <UInput v-model.number="editingAttendance.warning_letter_1" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Warning Letter 2">
+          <UInput v-model.number="editingAttendance.warning_letter_2" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Warning Letter 3">
+          <UInput v-model.number="editingAttendance.warning_letter_3" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Subordinate Late">
+          <UInput v-model.number="editingAttendance.subordinate_late" type="number" min="0" />
+        </UFormField>
+        <UFormField label="Subordinate AWOL">
+          <UInput v-model.number="editingAttendance.subordinate_awol" type="number" min="0" />
+        </UFormField>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-4 mt-4 border-t border-default">
+        <UButton
+          label="Cancel"
+          color="neutral"
+          variant="subtle"
+          class="cursor-pointer"
+          @click="showEditModal = false"
+        />
+        <UButton
+          label="Save Changes"
+          color="primary"
+          variant="solid"
+          :loading="loading"
+          class="cursor-pointer"
+          @click="saveAttendanceEdit"
+        />
+      </div>
+    </template>
+  </UModal>
 </template>
